@@ -11,6 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: swift --version
+      - run: swift package dump-package > /dev/null
       - run: swift build
       - run: swift test
 
