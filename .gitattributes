@@ -1,0 +1,2 @@
+# keep the embedded dataset byte-identical to the export (sha256)
+Sources/EORScopeEmployerCosts/data/* -text
