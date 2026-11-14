@@ -56,6 +56,14 @@ contribution lines and their official sources.
 
 Cost comparison, not legal or tax advice.
 
+## Data in this release
+
+Version 0.1.0 carries the EOR Scope dataset export of 13 October 2026 (commit
+`70449fb` of [eorscope/employer-costs](https://github.com/eorscope/employer-costs)).
+Figures published on eorscope.com after that date, such as the 2027 changes and
+the salary ranges where a country's total is only a lower or an upper bound, are
+on the site and in later exports: https://eorscope.com/data/.
+
 ## Updating the data
 
 `./sync.sh <dir>` copies the three CSV files and the data licence of a dataset
