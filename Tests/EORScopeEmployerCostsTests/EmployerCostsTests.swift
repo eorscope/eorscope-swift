@@ -55,29 +55,29 @@ final class EmployerCostsTests: XCTestCase {
         XCTAssertEqual(EmployerCosts.country("de")?.iso, "DE")
     }
 
-    // Published figures of the 2026-10-13 export, read from the CSV by an
+    // Published figures of the 2026-11-14 export, read from the CSV by an
     // independent script (MX printed 30.9 as on eorscope.com).
     func testKnownFigures() throws {
         let mx = try XCTUnwrap(EmployerCosts.country("MX"))
         XCTAssertEqual(mx.employerCostPctPrinted, 30.9)
         XCTAssertEqual(mx.exampleSalaryUSD, 36000)
-        XCTAssertEqual(mx.employerCostPct, 30.9336)
-        XCTAssertEqual(mx.employerCostUSDMonth, 928.01)
-        XCTAssertEqual(mx.fxLocalPerUSD, 18.125583)
-        XCTAssertEqual(mx.fxDate?.description, "2026-09-30")
+        XCTAssertEqual(mx.employerCostPct, 30.8872)
+        XCTAssertEqual(mx.employerCostUSDMonth, 926.62)
+        XCTAssertEqual(mx.fxLocalPerUSD, 18.907716)
+        XCTAssertEqual(mx.fxDate?.description, "2026-10-30")
 
         let de = try XCTUnwrap(EmployerCosts.country("DE"))
         XCTAssertEqual(de.exampleSalaryUSD, 75000)
         XCTAssertEqual(de.employerCostPct, 22.25)
         XCTAssertEqual(de.employerCostPctPrinted, 22.3)
         XCTAssertEqual(de.employerCostUSDMonth, 1390.63)
-        XCTAssertEqual(de.fxLocalPerUSD, 0.880669)
+        XCTAssertEqual(de.fxLocalPerUSD, 0.895095)
 
         let fr = try XCTUnwrap(EmployerCosts.country("FR"))
         XCTAssertEqual(fr.exampleSalaryUSD, 80000)
-        XCTAssertEqual(fr.employerCostPct, 48.2197)
+        XCTAssertEqual(fr.employerCostPct, 48.2033)
         XCTAssertEqual(fr.employerCostPctPrinted, 48.2)
-        XCTAssertEqual(fr.employerCostUSDMonth, 3214.65)
+        XCTAssertEqual(fr.employerCostUSDMonth, 3213.56)
 
         let ae = try XCTUnwrap(EmployerCosts.country("AE"))
         XCTAssertEqual(ae.employerCostPct, 2.8767)
@@ -118,6 +118,8 @@ final class EmployerCostsTests: XCTestCase {
             XCTAssertEqual(c.fxLocalPerUSD, num(v["fx_local_per_usd"]!))
             XCTAssertEqual(c.fxDate?.description ?? "", v["fx_date"])
             XCTAssertEqual(c.lastReviewed?.description ?? "", v["last_reviewed"])
+            XCTAssertEqual(c.totalBoundSalaryThresholdLocal, num(v["total_bound_salary_threshold_local"]!))
+            XCTAssertEqual(c.totalBoundSalaryRule, v["total_bound_salary_rule"])
         }
     }
 
@@ -128,6 +130,41 @@ final class EmployerCostsTests: XCTestCase {
         for l in EmployerCosts.contributions("AE") { XCTAssertTrue(l.totalDeclaredFloor, l.lineID) }
         XCTAssertEqual(EmployerCosts.country("DE")?.totalDeclaredFloor, false)
         XCTAssertEqual(EmployerCosts.countries().filter(\.totalDeclaredFloor).count, 13)
+    }
+
+    // Salary-dependent bounds (0.1.1), as eorscope.com prints them: only ES and FR.
+    func testBoundRules() throws {
+        XCTAssertEqual(EmployerCosts.countries().filter { !$0.totalBoundSalaryRule.isEmpty }.map(\.iso), ["ES", "FR"])
+        let es = try XCTUnwrap(EmployerCosts.country("ES"))
+        XCTAssertEqual(es.totalBoundSalaryRule, "at_least_above")
+        XCTAssertEqual(es.totalBoundSalaryThresholdLocal, 61214.4)
+        XCTAssertNil(es.totalBound(atGrossAnnualLocal: 61214.4))
+        let fr = try XCTUnwrap(EmployerCosts.country("FR"))
+        XCTAssertEqual(fr.totalBoundSalaryRule, "at_most_below")
+        XCTAssertEqual(fr.totalBoundSalaryThresholdLocal, 65629)
+        XCTAssertNil(fr.totalBound(atGrossAnnualLocal: 65629))
+        XCTAssertEqual(EmployerCosts.country("AE")?.totalBound(atGrossAnnualLocal: 1), .atLeast)
+        XCTAssertNil(EmployerCosts.country("DE")?.totalBound(atGrossAnnualLocal: 60000))
+    }
+
+    // ES above its maximum base (EUR 61,214.40): "at least".
+    func testBoundESAbove() throws {
+        XCTAssertEqual(EmployerCosts.country("ES")?.totalBound(atGrossAnnualLocal: 70000), .atLeast)
+    }
+
+    // ES below its maximum base: a total.
+    func testBoundESBelow() throws {
+        XCTAssertNil(try XCTUnwrap(EmployerCosts.country("ES")).totalBound(atGrossAnnualLocal: 40000))
+    }
+
+    // FR under 3 x SMIC (EUR 65,629): "at most".
+    func testBoundFRBelow() throws {
+        XCTAssertEqual(EmployerCosts.country("FR")?.totalBound(atGrossAnnualLocal: 44755), .atMost)
+    }
+
+    // FR above 3 x SMIC: a total.
+    func testBoundFRAbove() throws {
+        XCTAssertNil(try XCTUnwrap(EmployerCosts.country("FR")).totalBound(atGrossAnnualLocal: 80000))
     }
 
     // Regions cover every country once.

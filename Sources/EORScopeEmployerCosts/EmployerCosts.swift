@@ -68,6 +68,35 @@ public struct CountrySummary: Hashable, Sendable {
     public let fxDate: DayDate?
     /// Date the country data was last verified.
     public let lastReviewed: DayDate?
+    /// Gross annual salary, local currency, past which the total is a bound
+    /// and not a total; read with ``totalBoundSalaryRule``. Nil when none.
+    public let totalBoundSalaryThresholdLocal: Double?
+    /// `at_least_above` (the total is "at least" above the threshold, Spain),
+    /// `at_most_below` (the total is "at most" below it, France), or empty.
+    public let totalBoundSalaryRule: String
+
+    /// How eorscope.com prints the total at a gross annual salary in local
+    /// currency: ``TotalBound/atLeast`` for a declared floor or above the
+    /// threshold of an `at_least_above` rule, ``TotalBound/atMost`` below the
+    /// threshold of an `at_most_below` rule, nil (a total) otherwise and at the
+    /// threshold itself.
+    public func totalBound(atGrossAnnualLocal gross: Double) -> TotalBound? {
+        if totalDeclaredFloor { return .atLeast }
+        guard let t = totalBoundSalaryThresholdLocal else { return nil }
+        switch totalBoundSalaryRule {
+        case "at_least_above" where gross > t: return .atLeast
+        case "at_most_below" where gross < t: return .atMost
+        default: return nil
+        }
+    }
+}
+
+/// A bound on the employer cost total, as eorscope.com prints it.
+public enum TotalBound: Hashable, Sendable {
+    /// "at least": a floor, not a total.
+    case atLeast
+    /// "at most": a ceiling, not a total.
+    case atMost
 }
 
 /// One row of `country_contributions.csv`: an employer contribution
@@ -141,7 +170,10 @@ public struct Assumption: Hashable, Sendable {
 /// salary, use the calculator at https://eorscope.com/eor-cost-calculator/.
 ///
 /// A country flagged ``CountrySummary/totalDeclaredFloor`` publishes an
-/// "at least" figure, not a total. Under
+/// "at least" figure, not a total. Where
+/// ``CountrySummary/totalBoundSalaryRule`` is set, the total is a bound on one
+/// side of a salary threshold, see ``CountrySummary/totalBound(atGrossAnnualLocal:)``.
+/// Under
 /// ``CountrySummary/totalDeclaredCeiling`` the modelled contribution base is
 /// the highest the law allows, and lines with ``Contribution/inTotal`` false
 /// come on top. A contribution's ``Contribution/rate`` applies to its
@@ -229,7 +261,13 @@ struct Store {
                 totalDeclaredCeiling: r.bool("total_declared_ceiling"),
                 employerCostUSDMonth: r.double("employer_cost_usd_month"),
                 totalExcludes: r.str("total_excludes"), fxLocalPerUSD: r.double("fx_local_per_usd"),
-                fxDate: r.date("fx_date"), lastReviewed: r.date("last_reviewed")))
+                fxDate: r.date("fx_date"), lastReviewed: r.date("last_reviewed"),
+                totalBoundSalaryThresholdLocal: r.optDouble("total_bound_salary_threshold_local"),
+                totalBoundSalaryRule: r.str("total_bound_salary_rule")))
+            let rule = r.str("total_bound_salary_rule"), t = r.str("total_bound_salary_threshold_local")
+            if !(rule.isEmpty && t.isEmpty) && !(["at_least_above", "at_most_below"].contains(rule) && !t.isEmpty) {
+                r.fail("total_bound_salary_rule \"\(rule)\" with threshold \"\(t)\"")
+            }
         }
         s.countries.sort { $0.iso < $1.iso }
 
